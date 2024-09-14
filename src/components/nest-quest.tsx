@@ -31,7 +31,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer
+  ResponsiveContainer,
 } from "recharts";
 import {
   PlusCircle,
@@ -48,6 +48,7 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Chart } from "react-google-charts";
+import OpenAI from "openai";
 import tax_information from "../app/tax_information.json";
 
 interface JobOffer {
@@ -67,6 +68,9 @@ interface JobOffer {
     marketRate: number;
   };
 }
+
+const endpoint = "https://models.inference.ai.azure.com";
+const modelName = "gpt-4o-mini";
 
 const locations = tax_information.cities.map((city) => ({
   city: city.city,
@@ -110,10 +114,7 @@ export function NestQuestComponent() {
   const [currentEditOffer, setCurrentEditOffer] = useState<JobOffer | null>(
     null
   );
-  const [locationComparison, setLocationComparison] = useState<{
-    city: string;
-    state: string;
-  } | null>(null);
+  const [locationComparison, setLocationComparison] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     company: "",
     location: "",
@@ -131,15 +132,18 @@ export function NestQuestComponent() {
     },
   });
 
-  const handleInputChange = (e: { target: { name: string; value: string } }) => {
+  const handleInputChange = (e: {
+    target: { name: string; value: string };
+  }) => {
     const { name, value } = e.target;
     setFormData((prevData) => ({
       ...prevData,
       [name]: value,
     }));
   };
-
-  const handleEquityChange = (e: { target: { name: string; value: string } }) => {
+  const handleEquityChange = (e: {
+    target: { name: string; value: string };
+  }) => {
     const { name, value } = e.target;
     setFormData((prevData) => ({
       ...prevData,
@@ -663,20 +667,17 @@ export function NestQuestComponent() {
     `;
 
     try {
-      const response = await fetch("/api/openai", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ prompt }),
+      const client = new OpenAI({
+        baseURL: endpoint,
+        apiKey: process.env.GITHUB_TOKEN,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch location comparison");
-      }
+      const response = await client.chat.completions.create({
+        messages: [{ role: "user", content: prompt }],
+        model: modelName
+      });
 
-      const data = await response.json();
-      setLocationComparison(data.content);
+      setLocationComparison(response.choices[0].message.content);
     } catch (error) {
       console.error("Error fetching location comparison:", error);
     }
@@ -954,7 +955,7 @@ export function NestQuestComponent() {
                       </form>
                     </DialogContent>
                   </Dialog>
-                  {formData.equity.amount && (
+                  {formData.equity.amount && Number(formData.equity.amount) > 0 && (
                     <div className="bg-muted p-4 rounded-md mt-2">
                       <h3 className="text-lg font-semibold text-primary mb-2">
                         Equity Details
@@ -1080,7 +1081,7 @@ export function NestQuestComponent() {
                                   {formatMoney(offer.OtherExpenses)}
                                 </p>
                               )}
-                              {offer.equity && offer.equity.amount && (
+                              {offer.equity && offer.equity.amount > 0 && (
                                 <>
                                   <p>
                                     <DollarSign className="inline mr-2 text-muted-foreground" />
@@ -1283,7 +1284,7 @@ export function NestQuestComponent() {
                             Relocation: {formatMoney(offer.relocation)}
                           </p>
                         )}
-                        {offer.equity && offer.equity.amount && (
+                        {offer.equity && offer.equity.amount > 0 && (
                           <p>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             Yearly Equity Value:{" "}
