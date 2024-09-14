@@ -31,9 +31,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
-  LineChart,
-  Line,
+  ResponsiveContainer
 } from "recharts";
 import {
   PlusCircle,
@@ -53,7 +51,7 @@ import { Chart } from "react-google-charts";
 import tax_information from "../app/tax_information.json";
 
 interface JobOffer {
-  id: any;
+  id: string;
   company: string;
   location: string;
   base: number;
@@ -133,7 +131,7 @@ export function NestQuestComponent() {
     },
   });
 
-  const handleInputChange = (e: { target: any }) => {
+  const handleInputChange = (e: { target: { name: string; value: string } }) => {
     const { name, value } = e.target;
     setFormData((prevData) => ({
       ...prevData,
@@ -141,7 +139,7 @@ export function NestQuestComponent() {
     }));
   };
 
-  const handleEquityChange = (e: { target: any }) => {
+  const handleEquityChange = (e: { target: { name: string; value: string } }) => {
     const { name, value } = e.target;
     setFormData((prevData) => ({
       ...prevData,
@@ -161,7 +159,7 @@ export function NestQuestComponent() {
       signOn: parseInt(formData.signOn) || 0,
       relocation: parseInt(formData.relocation) || 0,
       OtherExpenses: parseInt(formData.OtherExpenses) || 0,
-      id: isEditMode ? currentEditOffer!.id : Date.now(),
+      id: isEditMode ? currentEditOffer!.id : Date.now().toString(),
       equity: {
         ...formData.equity,
         type: formData.equity.type as "RSU" | "Options",
@@ -609,7 +607,7 @@ export function NestQuestComponent() {
     );
   };
 
-  const handleDelete = (offerId: any) => {
+  const handleDelete = (offerId: string) => {
     setJobOffers(jobOffers.filter((offer) => offer.id !== offerId));
     setIsEditMode(false);
     setCurrentEditOffer(null);
