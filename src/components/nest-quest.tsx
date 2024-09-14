@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { getUserOffers, updateUserOffers } from "../../lib/firebase/index";
+import { useUser } from "@clerk/nextjs";
 import { Button } from "~/components/ui/button";
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Input } from "~/components/ui/input";
@@ -110,6 +112,7 @@ const formatMoney = (amount: number) => {
 
 export function NestQuestComponent() {
   const [jobOffers, setJobOffers] = useState<JobOffer[]>([]);
+  const { user } = useUser();
   const {
     comparedOffers,
     setComparedOffers,
@@ -137,6 +140,20 @@ export function NestQuestComponent() {
       marketRate: "",
     },
   });
+  useEffect(() => {
+    const fetchUserOffers = async () => {
+      if (user) {
+        try {
+          const offers = await getUserOffers(user.id);
+          setJobOffers(offers);
+        } catch (error) {
+          console.error("Error fetching user offers:", error);
+        }
+      }
+    };
+
+    fetchUserOffers();
+  }, [user]);
 
   const handleInputChange = (e: {
     target: { name: string; value: string };
@@ -161,8 +178,9 @@ export function NestQuestComponent() {
     }));
   };
 
-  const addJobOffer = (e: { preventDefault: () => void }) => {
+  const addJobOffer = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
+    if (!user) return;
     const newOffer: JobOffer = {
       ...formData,
       base: parseInt(formData.base) || 0,
@@ -179,33 +197,39 @@ export function NestQuestComponent() {
         marketRate: Number(formData.equity.marketRate),
       },
     };
+    let updatedOffers: JobOffer[];
+
     if (isEditMode) {
-      setJobOffers(
-        jobOffers.map((offer) =>
-          offer.id === currentEditOffer!.id ? newOffer : offer
-        )
+      updatedOffers = jobOffers.map((offer) =>
+        offer.id === currentEditOffer!.id ? newOffer : offer
       );
+    } else {
+      updatedOffers = [...jobOffers, newOffer];
+    }
+    try {
+      await updateUserOffers(user.id, updatedOffers);
+      setJobOffers(updatedOffers);
       setIsEditMode(false);
       setCurrentEditOffer(null);
-    } else {
-      setJobOffers([...jobOffers, newOffer]);
+      setFormData({
+        company: "",
+        location: "",
+        base: "",
+        bonus: "",
+        signOn: "",
+        relocation: "",
+        OtherExpenses: "",
+        equity: {
+          type: "RSU",
+          amount: "",
+          vestingPeriod: "",
+          vestingSchedule: "",
+          marketRate: "",
+        },
+      });
+    } catch (error) {
+      console.error("Error updating user offers:", error);
     }
-    setFormData({
-      company: "",
-      location: "",
-      base: "",
-      bonus: "",
-      signOn: "",
-      relocation: "",
-      OtherExpenses: "",
-      equity: {
-        type: "RSU",
-        amount: "",
-        vestingPeriod: "",
-        vestingSchedule: "",
-        marketRate: "",
-      },
-    });
   };
 
   const onEquitySubmit = (e: { preventDefault: () => void }) => {
@@ -618,26 +642,33 @@ export function NestQuestComponent() {
     );
   };
 
-  const handleDelete = (offerId: string) => {
-    setJobOffers(jobOffers.filter((offer) => offer.id !== offerId));
-    setIsEditMode(false);
-    setCurrentEditOffer(null);
-    setFormData({
-      company: "",
-      location: "",
-      base: "",
-      bonus: "",
-      signOn: "",
-      relocation: "",
-      OtherExpenses: "",
-      equity: {
-        type: "RSU",
-        amount: "",
-        vestingPeriod: "",
-        vestingSchedule: "",
-        marketRate: "",
-      },
-    });
+  const handleDelete = async (offerId: string) => {
+    if (!user) return;
+    const updatedOffers = jobOffers.filter((offer) => offer.id !== offerId);
+    try {
+      await updateUserOffers(user.id, updatedOffers);
+      setJobOffers(updatedOffers);
+      setIsEditMode(false);
+      setCurrentEditOffer(null);
+      setFormData({
+        company: "",
+        location: "",
+        base: "",
+        bonus: "",
+        signOn: "",
+        relocation: "",
+        OtherExpenses: "",
+        equity: {
+          type: "RSU",
+          amount: "",
+          vestingPeriod: "",
+          vestingSchedule: "",
+          marketRate: "",
+        },
+      });
+    } catch (error) {
+      console.error("Error deleting offer:", error);
+    }
   };
 
   const fetchLocationComparison = async () => {
@@ -697,15 +728,17 @@ export function NestQuestComponent() {
       const data = await response.json();
       console.log("API response:", data);
 
-      if (typeof data === 'string') {
+      if (typeof data === "string") {
         setLocationComparison(data);
-      } else if (typeof data.content === 'string') {
+      } else if (typeof data.content === "string") {
         setLocationComparison(data.content);
-      } else if (typeof data.choices?.[0]?.message?.content === 'string') {
+      } else if (typeof data.choices?.[0]?.message?.content === "string") {
         setLocationComparison(data.choices[0].message.content);
       } else {
         console.error("Unexpected API response structure:", data);
-        setLocationComparison("Unexpected API response structure. Please try again.");
+        setLocationComparison(
+          "Unexpected API response structure. Please try again."
+        );
       }
     } catch (error) {
       console.error("Error fetching location comparison:", error);
@@ -994,16 +1027,16 @@ export function NestQuestComponent() {
                       <h3 className="text-lg font-semibold text-primary mb-2">
                         Equity Details
                       </h3>
-                      <p>Type: {formData.equity.type}</p>
-                      <p>Amount: {formData.equity.amount}</p>
-                      <p>
+                      <div>Type: {formData.equity.type}</div>
+                      <div>Amount: {formData.equity.amount}</div>
+                      <div>
                         Vesting Period: {formData.equity.vestingPeriod} years
-                      </p>
-                      <p>Vesting Schedule: {formData.equity.vestingSchedule}</p>
-                      <p>
+                      </div>
+                      <div>Vesting Schedule: {formData.equity.vestingSchedule}</div>
+                      <div>
                         Market Rate:{" "}
                         {formatMoney(parseFloat(formData.equity.marketRate))}
-                      </p>
+                      </div>
                       <Button
                         onClick={() => setIsEquityDialogOpen(true)}
                         className="mt-2"
@@ -1051,24 +1084,24 @@ export function NestQuestComponent() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p>
+                    <div>
                       <MapPin className="inline mr-2 text-muted-foreground" />
                       {offer.location}
-                    </p>
-                    <p>
+                    </div>
+                    <div>
                       <DollarSign className="inline mr-2 text-muted-foreground" />
                       Base Salary: {formatMoney(offer.base)}
-                    </p>
-                    <p>
+                    </div>
+                    <div>
                       <DollarSign className="inline mr-2 text-muted-foreground" />
                       Total Compensation:{" "}
                       {formatMoney(calculateTotalCompensation(offer))}
-                    </p>
-                    <p>
+                    </div>
+                    <div>
                       <DollarSign className="inline mr-2 text-muted-foreground" />
                       Effective Salary:{" "}
                       {formatMoney(calculateEffectiveSalary(offer))}
-                    </p>
+                    </div>
                     <div className="flex space-x-2 mt-4">
                       <Dialog>
                         <DialogTrigger asChild>
@@ -1082,76 +1115,76 @@ export function NestQuestComponent() {
                           </DialogHeader>
                           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                              <p>
+                              <div>
                                 <MapPin className="inline mr-2 text-muted-foreground" />
                                 Location: {offer.location}
-                              </p>
-                              <p>
+                              </div>
+                              <div>
                                 <DollarSign className="inline mr-2 text-muted-foreground" />
                                 Base Salary: {formatMoney(offer.base)}
-                              </p>
+                              </div>
                               {offer.bonus > 0 && (
-                                <p>
+                                <div>
                                   <DollarSign className="inline mr-2 text-muted-foreground" />
                                   Bonus: {formatMoney(offer.bonus)}
-                                </p>
+                                </div>
                               )}
                               {offer.signOn > 0 && (
-                                <p>
+                                <div>
                                   <DollarSign className="inline mr-2 text-muted-foreground" />
                                   Sign On: {formatMoney(offer.signOn)}
-                                </p>
+                                </div>
                               )}
                               {offer.relocation > 0 && (
-                                <p>
+                                <div>
                                   <DollarSign className="inline mr-2 text-muted-foreground" />
                                   Relocation: {formatMoney(offer.relocation)}
-                                </p>
+                                </div>
                               )}
                               {offer.OtherExpenses > 0 && (
-                                <p>
+                                <div>
                                   <DollarSign className="inline mr-2 text-muted-foreground" />
                                   Other Expenses:{" "}
                                   {formatMoney(offer.OtherExpenses)}
-                                </p>
+                                </div>
                               )}
                               {offer.equity && offer.equity.amount && (
                                 <>
-                                  <p>
+                                  <div>
                                     <DollarSign className="inline mr-2 text-muted-foreground" />
                                     Equity Type: {offer.equity.type}
-                                  </p>
-                                  <p>
+                                  </div>
+                                  <div>
                                     <DollarSign className="inline mr-2 text-muted-foreground" />
                                     Equity Amount: {offer.equity.amount}
-                                  </p>
-                                  <p>
+                                  </div>
+                                  <div>
                                     <DollarSign className="inline mr-2 text-muted-foreground" />
                                     Vesting Period: {offer.equity.vestingPeriod}{" "}
                                     years
-                                  </p>
-                                  <p>
+                                  </div>
+                                  <div>
                                     <DollarSign className="inline mr-2 text-muted-foreground" />
                                     Vesting Schedule:{" "}
                                     {offer.equity.vestingSchedule}
-                                  </p>
-                                  <p>
+                                  </div>
+                                  <div>
                                     <DollarSign className="inline mr-2 text-muted-foreground" />
                                     Market Rate:{" "}
                                     {formatMoney(offer.equity.marketRate)}
-                                  </p>
+                                  </div>
                                 </>
                               )}
-                              <p>
+                              <div>
                                 <DollarSign className="inline mr-2 text-muted-foreground" />
                                 Total Compensation:{" "}
                                 {formatMoney(calculateTotalCompensation(offer))}
-                              </p>
-                              <p>
+                              </div>
+                              <div>
                                 <DollarSign className="inline mr-2 text-muted-foreground" />
                                 Effective Salary:{" "}
                                 {formatMoney(calculateEffectiveSalary(offer))}
-                              </p>
+                              </div>
                             </div>
                             <div>
                               <h3 className="text-xl font-bold mt-4 mb-2 text-primary">
@@ -1168,7 +1201,7 @@ export function NestQuestComponent() {
                               const fireCalc = calculateFIRE(offer);
                               return (
                                 <>
-                                  <p className="flex items-center">
+                                  <div className="flex items-center">
                                     FIRE Number:{" "}
                                     {formatMoney(fireCalc.fireNumber)}
                                     <Popover>
@@ -1183,8 +1216,8 @@ export function NestQuestComponent() {
                                         your portfolio annually in retirement.
                                       </PopoverContent>
                                     </Popover>
-                                  </p>
-                                  <p className="flex items-center">
+                                  </div>
+                                  <div className="flex items-center">
                                     Years to FIRE (No Interest):{" "}
                                     {fireCalc.yearsToFIRE0.toFixed(2)} years
                                     <Popover>
@@ -1198,8 +1231,8 @@ export function NestQuestComponent() {
                                         returns.
                                       </PopoverContent>
                                     </Popover>
-                                  </p>
-                                  <p className="flex items-center">
+                                  </div>
+                                  <div className="flex items-center">
                                     Years to FIRE (4.25% return):{" "}
                                     {fireCalc.yearsToFIRE425.toFixed(2)} years
                                     <Popover>
@@ -1214,8 +1247,8 @@ export function NestQuestComponent() {
                                         average treasury bond returns.
                                       </PopoverContent>
                                     </Popover>
-                                  </p>
-                                  <p className="flex items-center">
+                                  </div>
+                                  <div className="flex items-center">
                                     Years to FIRE (10% return):{" "}
                                     {fireCalc.yearsToFIRE10.toFixed(2)} years
                                     <Popover>
@@ -1230,7 +1263,7 @@ export function NestQuestComponent() {
                                         of the S&P 500.
                                       </PopoverContent>
                                     </Popover>
-                                  </p>
+                                  </div>
                                 </>
                               );
                             })()}
@@ -1292,50 +1325,50 @@ export function NestQuestComponent() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <p>
+                        <div>
                           <MapPin className="inline mr-2 text-muted-foreground" />
                           Location: {offer.location}
-                        </p>
-                        <p>
+                        </div>
+                        <div>
                           <DollarSign className="inline mr-2 text-muted-foreground" />
                           Base Salary: {formatMoney(offer.base)}
-                        </p>
+                        </div>
                         {offer.bonus > 0 && (
-                          <p>
+                          <div>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             Bonus: {formatMoney(offer.bonus)}
-                          </p>
+                          </div>
                         )}
                         {offer.signOn > 0 && (
-                          <p>
+                          <div>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             Sign On: {formatMoney(offer.signOn)}
-                          </p>
+                          </div>
                         )}
                         {offer.relocation > 0 && (
-                          <p>
+                          <div>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             Relocation: {formatMoney(offer.relocation)}
-                          </p>
+                          </div>
                         )}
                         {offer.equity && offer.equity.amount && (
-                          <p>
+                          <div>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             Yearly Equity Value:{" "}
                             {formatMoney(
                               (offer.equity.amount * offer.equity.marketRate) /
                                 offer.equity.vestingPeriod
                             )}
-                          </p>
+                          </div>
                         )}
-                        <p className="font-bold mt-2 text-primary">
+                        <div className="font-bold mt-2 text-primary">
                           Total Compensation:{" "}
                           {formatMoney(calculateTotalCompensation(offer))}
-                        </p>
-                        <p className="font-bold text-primary">
+                        </div>
+                        <div className="font-bold text-primary">
                           Effective Salary:{" "}
                           {formatMoney(calculateEffectiveSalary(offer))}
-                        </p>
+                        </div>
                         {renderPieChart(offer)}
                       </CardContent>
                     </Card>
@@ -1376,34 +1409,34 @@ export function NestQuestComponent() {
                           <h3 className="font-semibold text-lg">
                             {offer.location}
                           </h3>
-                          <p>
+                          <div>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             Average Rent:{" "}
                             {formatMoney(locationData ? locationData.rent : 0)}
-                          </p>
-                          <p>
+                          </div>
+                          <div>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             Average Food Cost:{" "}
                             {formatMoney(
                               locationData ? locationData.foodCost : 0
                             )}
-                          </p>
-                          <p>
+                          </div>
+                          <div>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             State Tax Rate:{" "}
                             {locationData
                               ? (Number(locationData.stateTax) * 100).toFixed(2)
                               : "N/A"}
                             %
-                          </p>
-                          <p>
+                          </div>
+                          <div>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             Local Tax Rate:{" "}
                             {locationData
                               ? (Number(locationData.localTax) * 100).toFixed(2)
                               : "N/A"}
                             %
-                          </p>
+                          </div>
                         </div>
                       );
                     })}
@@ -1427,12 +1460,16 @@ export function NestQuestComponent() {
                             Loading...
                           </span>
                         </div>
-                        <p className="mt-4">Loading location comparison...</p>
+                        <div className="mt-4">Loading location comparison...</div>
                       </div>
                     ) : locationComparison.startsWith("Error:") ? (
-                      <p className="text-red-500">{locationComparison}</p>
+                      <div className="text-red-500">{locationComparison}</div>
                     ) : (
-                      <div dangerouslySetInnerHTML={{ __html: marked(locationComparison) }} />
+                      <div
+                        dangerouslySetInnerHTML={{
+                          __html: marked(locationComparison),
+                        }}
+                      />
                     )}
                   </CardContent>
                 </Card>
@@ -1448,7 +1485,7 @@ export function NestQuestComponent() {
             <CardTitle className="text-primary">Access Restricted</CardTitle>
           </CardHeader>
           <CardContent>
-            <p>You need to be signed in to access this content.</p>
+            <div>You need to be signed in to access this content.</div>
             <SignInButton mode="modal">
               <Button className="mt-4">Sign In</Button>
             </SignInButton>

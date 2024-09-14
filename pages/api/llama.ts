@@ -8,6 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const modelName = process.env.MODEL_NAME;
 
   if (!token || !endpoint || !modelName) {
+    console.log("Missing environment variables");
     return res.status(500).json({ error: 'Missing environment variables' });
   }
 
@@ -31,9 +32,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if ('choices' in response.body) {
       res.status(200).json(response.body.choices[0].message.content);
     } else {
+      console.log("Unexpected response format");
       res.status(500).json({ error: 'Unexpected response format' });
     }
   } catch (error) {
+    console.log(error);
     res.status(500).json({ error: 'An error occurred while processing your request' });
   }
 }
