@@ -48,8 +48,8 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { Chart } from "react-google-charts";
-import OpenAI from "openai";
 import tax_information from "../app/tax_information.json";
+import { marked } from "marked";
 
 interface JobOffer {
   id: string;
@@ -68,9 +68,6 @@ interface JobOffer {
     marketRate: number;
   };
 }
-
-const endpoint = "https://models.inference.ai.azure.com";
-const modelName = "gpt-4o-mini";
 
 const locations = tax_information.cities.map((city) => ({
   city: city.city,
@@ -92,11 +89,16 @@ const federalTaxBrackets = tax_information.federal.map((bracket) => ({
 interface StoreState {
   comparedOffers: JobOffer[];
   setComparedOffers: (offers: JobOffer[]) => void;
+  locationComparison: string | null;
+  setLocationComparison: (comparison: string | null) => void;
 }
 
-const useStore = create((set) => ({
+const useStore = create<StoreState>((set) => ({
   comparedOffers: [],
   setComparedOffers: (offers: JobOffer[]) => set({ comparedOffers: offers }),
+  locationComparison: null,
+  setLocationComparison: (comparison: string | null) =>
+    set({ locationComparison: comparison }),
 }));
 
 const formatMoney = (amount: number) => {
@@ -108,13 +110,17 @@ const formatMoney = (amount: number) => {
 
 export function NestQuestComponent() {
   const [jobOffers, setJobOffers] = useState<JobOffer[]>([]);
-  const { comparedOffers, setComparedOffers } = useStore() as StoreState;
+  const {
+    comparedOffers,
+    setComparedOffers,
+    locationComparison,
+    setLocationComparison,
+  } = useStore();
   const [isEquityDialogOpen, setIsEquityDialogOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [currentEditOffer, setCurrentEditOffer] = useState<JobOffer | null>(
     null
   );
-  const [locationComparison, setLocationComparison] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     company: "",
     location: "",
@@ -141,6 +147,7 @@ export function NestQuestComponent() {
       [name]: value,
     }));
   };
+
   const handleEquityChange = (e: {
     target: { name: string; value: string };
   }) => {
@@ -636,6 +643,9 @@ export function NestQuestComponent() {
   const fetchLocationComparison = async () => {
     if (comparedOffers.length !== 2) return;
 
+    // Set locationComparison to null to show loading state
+    setLocationComparison(null);
+
     const [offer1, offer2] = comparedOffers;
     const fire1 = calculateFIRE(offer1);
     const fire2 = calculateFIRE(offer2);
@@ -663,23 +673,47 @@ export function NestQuestComponent() {
       - Years to FIRE (4.25% Return): ${fire2.yearsToFIRE425.toFixed(2)}
       - Years to FIRE (10% Return): ${fire2.yearsToFIRE10.toFixed(2)}
 
-      Consider these financial details in your comparison and analysis.
+      Consider these financial details in your comparison and analysis. Format your response in Markdown with appropriate headings, lists, and line breaks.
     `;
 
     try {
-      const client = new OpenAI({
-        baseURL: endpoint,
-        apiKey: process.env.GITHUB_TOKEN,
+      const response = await fetch("/api/llama", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: "You are a helpful assistant." },
+            { role: "user", content: prompt },
+          ],
+        }),
       });
 
-      const response = await client.chat.completions.create({
-        messages: [{ role: "user", content: prompt }],
-        model: modelName
-      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
 
-      setLocationComparison(response.choices[0].message.content);
+      const data = await response.json();
+      console.log("API response:", data);
+
+      if (typeof data === 'string') {
+        setLocationComparison(data);
+      } else if (typeof data.content === 'string') {
+        setLocationComparison(data.content);
+      } else if (typeof data.choices?.[0]?.message?.content === 'string') {
+        setLocationComparison(data.choices[0].message.content);
+      } else {
+        console.error("Unexpected API response structure:", data);
+        setLocationComparison("Unexpected API response structure. Please try again.");
+      }
     } catch (error) {
       console.error("Error fetching location comparison:", error);
+      if (error instanceof Error) {
+        setLocationComparison(`Error: ${error.message}`);
+      } else {
+        setLocationComparison("An unknown error occurred");
+      }
     }
   };
 
@@ -955,7 +989,7 @@ export function NestQuestComponent() {
                       </form>
                     </DialogContent>
                   </Dialog>
-                  {formData.equity.amount && Number(formData.equity.amount) > 0 && (
+                  {formData.equity.amount && (
                     <div className="bg-muted p-4 rounded-md mt-2">
                       <h3 className="text-lg font-semibold text-primary mb-2">
                         Equity Details
@@ -1081,7 +1115,7 @@ export function NestQuestComponent() {
                                   {formatMoney(offer.OtherExpenses)}
                                 </p>
                               )}
-                              {offer.equity && offer.equity.amount > 0 && (
+                              {offer.equity && offer.equity.amount && (
                                 <>
                                   <p>
                                     <DollarSign className="inline mr-2 text-muted-foreground" />
@@ -1284,7 +1318,7 @@ export function NestQuestComponent() {
                             Relocation: {formatMoney(offer.relocation)}
                           </p>
                         )}
-                        {offer.equity && offer.equity.amount > 0 && (
+                        {offer.equity && offer.equity.amount && (
                           <p>
                             <DollarSign className="inline mr-2 text-muted-foreground" />
                             Yearly Equity Value:{" "}
@@ -1383,12 +1417,22 @@ export function NestQuestComponent() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {locationComparison ? (
-                      <div
-                        dangerouslySetInnerHTML={{ __html: locationComparison }}
-                      />
+                    {locationComparison === null ? (
+                      <div className="flex flex-col items-center justify-center">
+                        <div
+                          className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"
+                          role="status"
+                        >
+                          <span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">
+                            Loading...
+                          </span>
+                        </div>
+                        <p className="mt-4">Loading location comparison...</p>
+                      </div>
+                    ) : locationComparison.startsWith("Error:") ? (
+                      <p className="text-red-500">{locationComparison}</p>
                     ) : (
-                      <p>Loading location comparison...</p>
+                      <div dangerouslySetInnerHTML={{ __html: marked(locationComparison) }} />
                     )}
                   </CardContent>
                 </Card>
