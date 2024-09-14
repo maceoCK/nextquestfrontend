@@ -1,0 +1,280 @@
+{
+  "cities": [
+    {
+      "city": "New York City",
+      "state": "New York",
+      "tax_brackets": [
+        {
+          "income_range": 12000,
+          "base": 0,
+          "rate": 0.03078
+        },
+        {
+          "income_range": 25000,
+          "base": 369,
+          "rate": 0.03762
+        },
+        {
+          "income_range": 50000,
+          "base": 858,
+          "rate": 0.03819
+        }
+      ],
+      "avg_food": 711,
+      "avg_rent": 5150,
+      "supplemental": 0.0425
+    },
+    {
+      "city": "Washington D.C.",
+      "state": "DC",
+      "tax_brackets": [
+        {
+          "income_range": 10000,
+          "base": 0,
+          "rate": 0.04
+        },
+        {
+          "income_range": 40000,
+          "base": 400,
+          "rate": 0.06
+        },
+        {
+          "income_range": 60000,
+          "base": 2200,
+          "rate": 0.065
+        },
+        {
+          "income_range": 250000,
+          "base": 3500,
+          "rate": 0.085
+        },
+        {
+          "income_range": 500000,
+          "base": 19650,
+          "rate": 0.0925
+        }
+      ],
+      "avg_food": 700,
+      "avg_rent": 2631,
+      "supplemental": 0.0085
+    },
+    {
+      "city": "Chicago",
+      "state": "Illinois",
+      "tax_brackets": "NA",
+      "avg_food": 400,
+      "avg_rent": 1858,
+      "supplemental": 0.0495
+    },
+    {
+      "city": "San Francisco",
+      "state": "California",
+      "tax_brackets": "NA",
+      "avg_food": 762,
+      "avg_rent": 2891,
+      "supplemental": 0.012
+    },
+    {
+      "city": "Seattle",
+      "state": "Washington",
+      "tax_brackets": "NA",
+      "avg_food": 500,
+      "avg_rent": 2495,
+      "supplemental": "NA"
+    },
+    {
+      "city": "Austin",
+      "state": "Texas",
+      "tax_brackets": "NA",
+      "avg_food": 594,
+      "avg_rent": 1467,
+      "supplemental": 0.02
+    },
+    {
+      "city": "Boston",
+      "state": "Massachussetts",
+      "tax_brackets": "NA",
+      "avg_food": 739,
+      "avg_rent": 3484,
+      "supplemental": 0.01074
+    },
+    {
+      "city": "Los Angeles",
+      "state": "California",
+      "tax_brackets": "NA",
+      "avg_food": 715,
+      "avg_rent": 2159,
+      "supplemental": 0.012
+    },
+    {
+      "city": "Denver",
+      "state": "Colorado",
+      "tax_brackets": "NA",
+      "avg_food": 658,
+      "avg_rent": 1713,
+      "supplemental": 0.0056
+    },
+    {
+      "city": "Atlanta",
+      "state": "Georgia",
+      "tax_brackets": "NA",
+      "avg_food": 707,
+      "avg_rent": 1597,
+      "supplemental": 0.014
+    }
+  ],
+
+  "states": [
+    {
+      "state": "New York",
+      "supplemental_tax": "",
+      "tax_brackets": [
+        {
+          "income_range": 8500,
+          "base": 0,
+          "rate": 0.04
+        },
+        {
+          "income_range": 11700,
+          "base": 340,
+          "rate": 0.045
+        },
+        {
+          "income_range": 13900,
+          "base": 484,
+          "rate": 0.0525
+        },
+        {
+          "income_range": 80650,
+          "base": 500,
+          "rate": 0.055
+        },
+        {
+          "income_range": 215400,
+          "base": 4271,
+          "rate": 0.06
+        }
+      ]
+    },
+    {
+      "state": "California",
+      "supplemental_tax": 0.1023,
+      "tax_brackets": [
+        {
+          "income_range": 10412,
+          "base": 0,
+          "rate": 0.01
+        },
+        {
+          "income_range": 24684,
+          "base": 104.12,
+          "rate": 0.02
+        },
+        {
+          "income_range": 38959,
+          "base": 389.56,
+          "rate": 0.04
+        },
+        {
+          "income_range": 54081,
+          "base": 960.56,
+          "rate": 0.06
+        },
+        {
+          "income_range": 68350,
+          "base": 1867.88,
+          "rate": 0.08
+        },
+        {
+          "income_range": 349137,
+          "base": 3009.4,
+          "rate": 0.093
+        }
+      ]
+    },
+    {
+      "state": "Texas",
+      "income_tax": "NA",
+      "supplemental_tax": "NA"
+    },
+    {
+      "state": "Illinois",
+      "income_tax": 0.0495,
+      "supplemental_tax": 0.0495
+    },
+    {
+      "state": "Massachusetts",
+      "income_tax": 0.05,
+      "supplemental_tax": "NA"
+    },
+    {
+      "state": "Colorado",
+      "income_tax": 0.04,
+      "supplemental_tax": 0.04
+    },
+    {
+      "state": "Seattle",
+      "income_tax": "NA",
+      "supplemental_tax": "NA"
+    },
+    {
+      "state": "Georgia",
+      "income_tax": 0.0549,
+      "supplemental_tax": [
+        {
+          "income_range": 8000,
+          "rate": 0.02
+        },
+        {
+          "income_range": 10000,
+          "rate": 0.03
+        },
+        {
+          "income_range": 12000,
+          "rate": 0.04
+        },
+        {
+          "income_range": 15000,
+          "rate": 0.05
+        },
+        {
+          "income_range": 1000000,
+          "rate": 0.0549
+        }
+      ]
+    }
+  ],
+
+  "federal": [
+    {
+      "income_range": 11600,
+      "base": 0,
+      "rate": 0.1
+    },
+    {
+      "income_range": 47150,
+      "base": 1160,
+      "rate": 0.12
+    },
+    {
+      "income_range": 100525,
+      "base": 5426,
+      "rate": 0.22
+    },
+    {
+      "income_range": 191950,
+      "base": 960.56,
+      "rate": 0.24
+    },
+    {
+      "income_range": 243725,
+      "base": 39110.5,
+      "rate": 0.32
+    },
+    {
+      "income_range": 609350,
+      "base": 55678.5,
+      "rate": 0.35
+    }
+  ]
+}
