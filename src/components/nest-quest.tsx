@@ -1,34 +1,78 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from "~/components/ui/button"
 import { Input } from "~/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "~/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "~/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu"
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts'
-import { PlusCircle, DollarSign, MapPin, Building, Briefcase, User, Edit, Trash2 } from 'lucide-react'
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
+import { PlusCircle, DollarSign, MapPin, Edit, Trash2, User, HelpCircle } from 'lucide-react'
 import { create } from 'zustand'
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover"
+import { Chart } from "react-google-charts";
+
+interface JobOffer {
+  id: any
+  company: string;
+  location: string;
+  base: number;
+  bonus: number;
+  signOn: number;
+  relocation: number;
+  OtherExpenses: number;
+  equity: {
+    type: 'RSU' | 'Options';
+    amount: number;
+    vestingPeriod: number;
+    vestingSchedule: string;
+    marketRate: number;
+  };
+}
+
 
 const locations = [
-  "New York, NY", "San Francisco, CA", "Seattle, WA", "Austin, TX", "Chicago, IL",
-  "Los Angeles, CA", "Boston, MA", "Washington, D.C.", "Denver, CO", "Atlanta, GA"
+  { city: "New York", state: "NY", rent: 3500, foodCost: 600, stateTax: 0.0685, localTax: 0.03876 },
+  { city: "San Francisco", state: "CA", rent: 3700, foodCost: 650, stateTax: 0.1023, localTax: 0 },
+  { city: "Seattle", state: "WA", rent: 2500, foodCost: 550, stateTax: 0, localTax: 0 },
+  { city: "Austin", state: "TX", rent: 1800, foodCost: 450, stateTax: 0, localTax: 0 },
+  { city: "Chicago", state: "IL", rent: 2200, foodCost: 500, stateTax: 0.0495, localTax: 0.01 },
 ]
+
+const federalTaxBrackets = [
+  { rate: 0.10, threshold: 0 },
+  { rate: 0.12, threshold: 9950 },
+  { rate: 0.22, threshold: 40525 },
+  { rate: 0.24, threshold: 86375 },
+  { rate: 0.32, threshold: 164925 },
+  { rate: 0.35, threshold: 209425 },
+  { rate: 0.37, threshold: 523600 },
+]
+
+interface StoreState {
+  comparedOffers: JobOffer[];
+  setComparedOffers: (offers: JobOffer[]) => void;
+}
 
 const useStore = create((set) => ({
   comparedOffers: [],
-  setComparedOffers: (offers) => set({ comparedOffers: offers }),
+  setComparedOffers: (offers: JobOffer[]) => set({ comparedOffers: offers }),
 }))
 
+const formatMoney = (amount: number) => {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
+}
+
 export function NestQuestComponent() {
-  const [jobOffers, setJobOffers] = useState([])
-  const { comparedOffers, setComparedOffers } = useStore()
+  const [jobOffers, setJobOffers] = useState<JobOffer[]>([])
+  const { comparedOffers, setComparedOffers } = useStore() as StoreState
   const [isEquityDialogOpen, setIsEquityDialogOpen] = useState(false)
   const [isEditMode, setIsEditMode] = useState(false)
-  const [currentEditOffer, setCurrentEditOffer] = useState(null)
+  const [currentEditOffer, setCurrentEditOffer] = useState<JobOffer | null>(null)
+  const [locationComparison, setLocationComparison] = useState<{ city: string, state: string } | null>(null)
   const [formData, setFormData] = useState({
     company: '',
     location: '',
@@ -36,6 +80,7 @@ export function NestQuestComponent() {
     bonus: '',
     signOn: '',
     relocation: '',
+    OtherExpenses: '',
     equity: {
       type: 'RSU',
       amount: '',
@@ -45,7 +90,7 @@ export function NestQuestComponent() {
     }
   })
 
-  const handleInputChange = (e) => {
+  const handleInputChange = (e: { target: any }) => {
     const { name, value } = e.target
     setFormData(prevData => ({
       ...prevData,
@@ -53,7 +98,7 @@ export function NestQuestComponent() {
     }))
   }
 
-  const handleEquityChange = (e) => {
+  const handleEquityChange = (e: { target: any }) => {
     const { name, value } = e.target
     setFormData(prevData => ({
       ...prevData,
@@ -64,18 +109,26 @@ export function NestQuestComponent() {
     }))
   }
 
-  const addJobOffer = (e) => {
+  const addJobOffer = (e: { preventDefault: () => void }) => {
     e.preventDefault()
-    const newOffer = {
+    const newOffer: JobOffer = {
       ...formData,
       base: parseInt(formData.base) || 0,
       bonus: parseInt(formData.bonus) || 0,
       signOn: parseInt(formData.signOn) || 0,
       relocation: parseInt(formData.relocation) || 0,
-      id: isEditMode ? currentEditOffer.id : Date.now()
+      OtherExpenses: parseInt(formData.OtherExpenses) || 0,
+      id: isEditMode ? currentEditOffer!.id : Date.now(),
+      equity: {
+        ...formData.equity,
+        type: formData.equity.type as "RSU" | "Options",
+        amount: Number(formData.equity.amount),
+        vestingPeriod: Number(formData.equity.vestingPeriod),
+        marketRate: Number(formData.equity.marketRate)
+      }
     }
     if (isEditMode) {
-      setJobOffers(jobOffers.map(offer => offer.id === currentEditOffer.id ? newOffer : offer))
+      setJobOffers(jobOffers.map(offer => offer.id === currentEditOffer!.id ? newOffer : offer))
       setIsEditMode(false)
       setCurrentEditOffer(null)
     } else {
@@ -88,6 +141,7 @@ export function NestQuestComponent() {
       bonus: '',
       signOn: '',
       relocation: '',
+      OtherExpenses: '',
       equity: {
         type: 'RSU',
         amount: '',
@@ -98,39 +152,88 @@ export function NestQuestComponent() {
     })
   }
 
-  const onEquitySubmit = (e) => {
+  const onEquitySubmit = (e: { preventDefault: () => void }) => {
     e.preventDefault()
     setIsEquityDialogOpen(false)
   }
 
-  const calculateEffectiveSalary = (offer) => {
-    if (!offer) return 0
-    const totalComp = calculateTotalCompensation(offer)
-    return Math.round(totalComp * 0.7) // Assuming 30% tax rate
+  const calculateTaxes = (salary: number, location: string) => {
+    const locationData = locations.find(loc => `${loc.city}, ${loc.state}` === location)
+    if (!locationData) return { federalTax: 0, stateTax: 0, localTax: 0 }
+
+    // Calculate Federal Tax
+    let federalTax = 0
+    let remainingSalary = salary
+    for (let i = federalTaxBrackets.length - 1; i >= 0; i--) {
+      const { rate, threshold } = federalTaxBrackets[i]
+      if (salary > threshold) {
+        federalTax += (remainingSalary - threshold) * rate
+        remainingSalary = threshold
+      }
+    }
+
+    // Calculate State and Local Tax
+    const stateTax = salary * locationData.stateTax
+    const localTax = salary * locationData.localTax
+
+    return { federalTax, stateTax, localTax }
   }
 
-  const calculateTotalCompensation = (offer) => {
+  const calculateEffectiveSalary = (offer: JobOffer) => {
     if (!offer) return 0
-    const baseComp = parseInt(offer.base) + parseInt(offer.bonus) + (parseInt(offer.signOn) / 4) + (parseInt(offer.relocation) / 4)
+    const totalComp = calculateTotalCompensation(offer)
+    const { federalTax, stateTax, localTax } = calculateTaxes(totalComp, offer.location)
+    return Math.round(totalComp - federalTax - stateTax - localTax)
+  }
+
+  const calculateTotalCompensation = (offer: JobOffer) => {
+    if (!offer) return 0
+    const baseComp = Number(offer.base) + Number(offer.bonus) + (Number(offer.signOn) / 4) + (Number(offer.relocation) / 4)
     let equityValue = 0
     if (offer.equity && offer.equity.type === 'RSU' && offer.equity.amount && offer.equity.marketRate && offer.equity.vestingPeriod) {
-      const yearlyEquity = (parseFloat(offer.equity.amount) * parseFloat(offer.equity.marketRate)) / parseFloat(offer.equity.vestingPeriod)
+      const yearlyEquity = (Number(offer.equity.amount) * Number(offer.equity.marketRate)) / Number(offer.equity.vestingPeriod)
       equityValue = yearlyEquity
     }
     return Math.round(baseComp + equityValue)
   }
 
-  const renderPieChart = (offer) => {
+  const calculateFIRE = (offer: JobOffer) => {
     const effectiveSalary = calculateEffectiveSalary(offer)
-    const rent = 2000
-    const food = 500
-    const savings = Math.max(0, effectiveSalary - rent - food)
+    const locationData = locations.find(loc => `${loc.city}, ${loc.state}` === offer.location)
+    const expenses = (locationData ? locationData.rent : 2000) + (locationData ? locationData.foodCost : 500) * 12 + (offer.OtherExpenses || 0)
+    const savings = effectiveSalary - expenses
+
+    const fireNumber = expenses * 25
+    const yearsToFIRE0 = fireNumber / savings
+    const yearsToFIRE425 = Math.log(fireNumber / savings * 0.0425 + 1) / Math.log(1.0425)
+    const yearsToFIRE10 = Math.log(fireNumber / savings * 0.10 + 1) / Math.log(1.10)
+
+    return {
+      fireNumber: fireNumber,
+      yearsToFIRE425: yearsToFIRE425,
+      yearsToFIRE10: yearsToFIRE10,
+      yearsToFIRE0: yearsToFIRE0
+    }
+  }
+
+  const renderPieChart = (offer: JobOffer) => {
+    const effectiveSalary = calculateEffectiveSalary(offer)
+    const locationData = locations.find(loc => `${loc.city}, ${loc.state}` === offer.location)
+    const rent = locationData ? locationData.rent : 2000
+    const food = locationData ? locationData.foodCost : 500
+    const expenses = offer.OtherExpenses || 0
+    const { federalTax, stateTax, localTax } = calculateTaxes(calculateTotalCompensation(offer), offer.location)
+    const savings = Math.max(0, effectiveSalary - rent - food - expenses)
     const data = [
       { name: 'Rent', value: rent },
       { name: 'Food', value: food },
-      { name: 'Savings', value: savings }
+      { name: 'Federal Tax', value: Math.round(federalTax) },
+      { name: 'State Tax', value: Math.round(stateTax) },
+      { name: 'Local Tax', value: Math.round(localTax) },
+      { name: 'Savings', value: savings },
+      { name: 'Other Expenses', value: expenses }
     ]
-    const COLORS = ['#0088FE', '#00C49F', '#FFBB28']
+    const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#AF19FF', '#00FF00']
 
     return (
       <ResponsiveContainer width="100%" height={300}>
@@ -164,22 +267,23 @@ export function NestQuestComponent() {
     const data = [
       { name: 'Base Salary', offer1: offer1.base, offer2: offer2.base },
       { name: 'Total Compensation', offer1: calculateTotalCompensation(offer1), offer2: calculateTotalCompensation(offer2) },
+      { name: 'Effective Salary', offer1: calculateEffectiveSalary(offer1), offer2: calculateEffectiveSalary(offer2) },
     ]
 
-    if (parseInt(offer1.bonus) > 0 || parseInt(offer2.bonus) > 0) {
+    if (offer1.bonus > 0 || offer2.bonus > 0) {
       data.push({ name: 'Bonus', offer1: offer1.bonus, offer2: offer2.bonus })
     }
-    if (parseInt(offer1.signOn) > 0 || parseInt(offer2.signOn) > 0) {
+    if (offer1.signOn > 0 || offer2.signOn > 0) {
       data.push({ name: 'Sign On', offer1: offer1.signOn, offer2: offer2.signOn })
     }
-    if (parseInt(offer1.relocation) > 0 || parseInt(offer2.relocation) > 0) {
+    if (offer1.relocation > 0 || offer2.relocation > 0) {
       data.push({ name: 'Relocation', offer1: offer1.relocation, offer2: offer2.relocation })
     }
-    if ((offer1.equity && parseFloat(offer1.equity.amount) > 0) || (offer2.equity && parseFloat(offer2.equity.amount) > 0)) {
+    if ((offer1.equity && offer1.equity.amount > 0) || (offer2.equity && offer2.equity.amount > 0)) {
       data.push({ 
         name: 'Yearly Equity Value', 
-        offer1: offer1.equity ? (parseFloat(offer1.equity.amount) * parseFloat(offer1.equity.marketRate)) / parseFloat(offer1.equity.vestingPeriod) : 0,
-        offer2: offer2.equity ? (parseFloat(offer2.equity.amount) * parseFloat(offer2.equity.marketRate)) / parseFloat(offer2.equity.vestingPeriod) : 0
+        offer1: offer1.equity ? (offer1.equity.amount * offer1.equity.marketRate) / offer1.equity.vestingPeriod : 0,
+        offer2: offer2.equity ? (offer2.equity.amount * offer2.equity.marketRate) / offer2.equity.vestingPeriod : 0
       })
     }
 
@@ -197,30 +301,92 @@ export function NestQuestComponent() {
       </ResponsiveContainer>
     )
   }
+  const renderFIRETimeline = () => {
+    if (comparedOffers.length < 2) return null;
 
-  const renderRadarChart = (offer) => {
+    const [offer1, offer2] = comparedOffers;
+    const fire1 = calculateFIRE(offer1);
+    const fire2 = calculateFIRE(offer2);
+
+    const currentDate = new Date();
+    const endDate = new Date(currentDate.getFullYear() + Math.max(fire1.yearsToFIRE10, fire2.yearsToFIRE10), currentDate.getMonth(), currentDate.getDate());
+
     const data = [
-      { subject: 'Base Salary', A: parseInt(offer.base), fullMark: 150000 },
-      { subject: 'Bonus', A: parseInt(offer.bonus), fullMark: 50000 },
-      { subject: 'Sign On', A: parseInt(offer.signOn), fullMark: 30000 },
-      { subject: 'Relocation', A: parseInt(offer.relocation), fullMark: 20000 },
-      { subject: 'Equity', A: offer.equity ? (parseFloat(offer.equity.amount) * parseFloat(offer.equity.marketRate)) / parseFloat(offer.equity.vestingPeriod) : 0, fullMark: 100000 },
-    ]
+      [
+        { type: "string", id: "Scenario" },
+        { type: "string", id: "Company" },
+        { type: "date", id: "Start" },
+        { type: "date", id: "End" },
+      ],
+      [
+        "No Interest",
+        offer1.company,
+        currentDate,
+        new Date(currentDate.getTime() + fire1.yearsToFIRE0 * 365 * 24 * 60 * 60 * 1000),
+      ],
+      [
+        "No Interest",
+        offer2.company,
+        currentDate,
+        new Date(currentDate.getTime() + fire2.yearsToFIRE0 * 365 * 24 * 60 * 60 * 1000),
+      ],
+      [
+        "4.25% Return",
+        offer1.company,
+        currentDate,
+        new Date(currentDate.getTime() + fire1.yearsToFIRE425 * 365 * 24 * 60 * 60 * 1000),
+      ],
+      [
+        "4.25% Return",
+        offer2.company,
+        currentDate,
+        new Date(currentDate.getTime() + fire2.yearsToFIRE425 * 365 * 24 * 60 * 60 * 1000),
+      ],
+      [
+        "10% Return",
+        offer1.company,
+        currentDate,
+        new Date(currentDate.getTime() + fire1.yearsToFIRE10 * 365 * 24 * 60 * 60 * 1000),
+      ],
+      [
+        "10% Return",
+        offer2.company,
+        currentDate,
+        new Date(currentDate.getTime() + fire2.yearsToFIRE10 * 365 * 24 * 60 * 60 * 1000),
+      ],
+    ];
+
+    const options = {
+      timeline: { 
+        groupByRowLabel: true,
+        colorByRowLabel: true,
+      },
+      hAxis: {
+        format: 'yyyy',
+        title: 'Years to FIRE',
+        minValue: currentDate,
+        maxValue: endDate,
+      },
+      colors: ["limegreen", "blue"],
+      backgroundColor: "black",
+      tooltip: {
+        textStyle: { color: 'white' },
+        backgroundColor: 'black',
+      },
+    };
 
     return (
-      <ResponsiveContainer width="100%" height={300}>
-        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
-          <PolarGrid />
-          <PolarAngleAxis dataKey="subject" />
-          <PolarRadiusAxis angle={30} domain={[0, 150000]} />
-          <Radar name={offer.company} dataKey="A" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
-          <Legend />
-        </RadarChart>
-      </ResponsiveContainer>
-    )
-  }
+      <Chart
+        chartType="Timeline"
+        width="100%"
+        height="400px"
+        data={data}
+        options={options}
+      />
+    );
+  };
 
-  const updateComparedOffer = (index, value) => {
+  const updateComparedOffer = (index: number, value: string) => {
     const newOffer = jobOffers.find(offer => offer.company === value)
     if (newOffer) {
       const updatedOffers = [...comparedOffers]
@@ -229,19 +395,20 @@ export function NestQuestComponent() {
     }
   }
 
-  const isExpensesExceedIncome = (offer) => {
+  const isExpensesExceedIncome = (offer: JobOffer) => {
     const effectiveSalary = calculateEffectiveSalary(offer)
-    const expenses = 2000 + 500 // rent + food
+    const locationData = locations.find(loc => `${loc.city}, ${loc.state}` === offer.location)
+    const expenses = (locationData ? locationData.rent : 2000) + (locationData ? locationData.foodCost : 500)
     return expenses > effectiveSalary
   }
 
-  const handleEdit = (offer) => {
+  const handleEdit = (offer: React.SetStateAction<JobOffer | null> | React.SetStateAction<{ company: string; location: string; base: string; bonus: string; signOn: string; relocation: string; OtherExpenses: string; equity: { type: string; amount: string; vestingPeriod: string; vestingSchedule: string; marketRate: string } }>) => {
     setIsEditMode(true)
-    setCurrentEditOffer(offer)
-    setFormData(offer)
+    setCurrentEditOffer(offer as JobOffer)
+    setFormData(offer as { company: string; location: string; base: string; bonus: string; signOn: string; relocation: string; OtherExpenses: string; equity: { type: string; amount: string; vestingPeriod: string; vestingSchedule: string; marketRate: string } })
   }
 
-  const handleDelete = (offerId) => {
+  const handleDelete = (offerId: any) => {
     setJobOffers(jobOffers.filter(offer => offer.id !== offerId))
     setIsEditMode(false)
     setCurrentEditOffer(null)
@@ -252,6 +419,7 @@ export function NestQuestComponent() {
       bonus: '',
       signOn: '',
       relocation: '',
+      OtherExpenses: '',
       equity: {
         type: 'RSU',
         amount: '',
@@ -261,6 +429,63 @@ export function NestQuestComponent() {
       }
     })
   }
+
+  const fetchLocationComparison = async () => {
+    if (comparedOffers.length !== 2) return
+
+    const [offer1, offer2] = comparedOffers
+    const fire1 = calculateFIRE(offer1)
+    const fire2 = calculateFIRE(offer2)
+
+    const prompt = `
+      Compare ${offer1.location} and ${offer2.location} in terms of culture, cost, lifestyle for post-graduates. List pros and cons for each location.
+      
+      ${offer1.company} Offer Details:
+      - Base Salary: ${formatMoney(offer1.base)}
+      - Total Compensation: ${formatMoney(calculateTotalCompensation(offer1))}
+      - Effective Salary: ${formatMoney(calculateEffectiveSalary(offer1))}
+      - FIRE Number: ${formatMoney(fire1.fireNumber)}
+      - Years to FIRE (No Interest): ${fire1.yearsToFIRE0.toFixed(2)}
+      - Years to FIRE (4.25% Return): ${fire1.yearsToFIRE425.toFixed(2)}
+      - Years to FIRE (10% Return): ${fire1.yearsToFIRE10.toFixed(2)}
+
+      ${offer2.company} Offer Details:
+      - Base Salary: ${formatMoney(offer2.base)}
+      - Total Compensation: ${formatMoney(calculateTotalCompensation(offer2))}
+      - Effective Salary: ${formatMoney(calculateEffectiveSalary(offer2))}
+      - FIRE Number: ${formatMoney(fire2.fireNumber)}
+      - Years to FIRE (No Interest): ${fire2.yearsToFIRE0.toFixed(2)}
+      - Years to FIRE (4.25% Return): ${fire2.yearsToFIRE425.toFixed(2)}
+      - Years to FIRE (10% Return): ${fire2.yearsToFIRE10.toFixed(2)}
+
+      Consider these financial details in your comparison and analysis.
+    `
+
+    try {
+      const response = await fetch('/api/openai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch location comparison')
+      }
+
+      const data = await response.json()
+      setLocationComparison(data.content)
+    } catch (error) {
+      console.error('Error fetching location comparison:', error)
+    }
+  }
+
+  useEffect(() => {
+    if (comparedOffers.length === 2) {
+      fetchLocationComparison()
+    }
+  }, [comparedOffers])
 
   return (
     <div className="min-h-screen bg-background text-foreground p-8">
@@ -300,7 +525,7 @@ export function NestQuestComponent() {
               <CardTitle className="text-primary">{isEditMode ? 'Edit Job Offer' : 'Add New Job Offer'}</CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={addJobOffer} className="space-y-8">
+              <form onSubmit={addJobOffer}  className="space-y-8">
                 <div>
                   <label htmlFor="company" className="block text-sm font-medium text-gray-700">Company</label>
                   <Input id="company" name="company" placeholder="Enter company name" required value={formData.company} onChange={handleInputChange} />
@@ -313,7 +538,9 @@ export function NestQuestComponent() {
                     </SelectTrigger>
                     <SelectContent>
                       {locations.map((location) => (
-                        <SelectItem key={location} value={location}>{location}</SelectItem>
+                        <SelectItem key={`${location.city}, ${location.state}`} value={`${location.city}, ${location.state}`}>
+                          {`${location.city}, ${location.state}`}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -334,6 +561,11 @@ export function NestQuestComponent() {
                   <label htmlFor="relocation" className="block text-sm font-medium text-gray-700">Relocation Amount</label>
                   <Input id="relocation" name="relocation" type="number" placeholder="Enter relocation amount" value={formData.relocation} onChange={handleInputChange} />
                 </div>
+                <div>
+                  <label htmlFor="OtherExpenses" className="block text-sm font-medium text-gray-700">Other Expenses</label>
+                  <Input id="OtherExpenses" name="OtherExpenses" type="number" placeholder="Enter other expenses" value={formData.OtherExpenses} onChange={handleInputChange} />
+                </div>
+
                 <Dialog open={isEquityDialogOpen} onOpenChange={setIsEquityDialogOpen}>
                   <DialogTrigger asChild>
                     <Button type="button" className="w-full">
@@ -384,7 +616,7 @@ export function NestQuestComponent() {
                     <p>Amount: {formData.equity.amount}</p>
                     <p>Vesting Period: {formData.equity.vestingPeriod} years</p>
                     <p>Vesting Schedule: {formData.equity.vestingSchedule}</p>
-                    <p>Market Rate: ${formData.equity.marketRate}</p>
+                    <p>Market Rate: {formatMoney(parseFloat(formData.equity.marketRate))}</p>
                     <Button onClick={() => setIsEquityDialogOpen(true)} className="mt-2">
                       <Edit className="mr-2 h-4 w-4" /> Edit Equity Details
                     </Button>
@@ -402,7 +634,7 @@ export function NestQuestComponent() {
                   )}
                 </Button>
                 {isEditMode && (
-                  <Button type="button" variant="destructive" className="w-full mt-2" onClick={() => handleDelete(currentEditOffer.id)}>
+                  <Button type="button" variant="destructive" className="w-full mt-2" onClick={() => handleDelete(currentEditOffer?.id || '')}>
                     <Trash2 className="mr-2 h-4 w-4" /> Delete Offer
                   </Button>
                 )}
@@ -418,8 +650,9 @@ export function NestQuestComponent() {
                 </CardHeader>
                 <CardContent>
                   <p><MapPin className="inline mr-2 text-muted-foreground" />{offer.location}</p>
-                  <p><DollarSign className="inline mr-2 text-muted-foreground" />Base Salary: ${offer.base}</p>
-                  <p><DollarSign className="inline mr-2 text-muted-foreground" />Total Compensation: ${calculateTotalCompensation(offer)}</p>
+                  <p><DollarSign className="inline mr-2 text-muted-foreground" />Base Salary: {formatMoney(offer.base)}</p>
+                  <p><DollarSign className="inline mr-2 text-muted-foreground" />Total Compensation: {formatMoney(calculateTotalCompensation(offer))}</p>
+                  <p><DollarSign className="inline mr-2 text-muted-foreground" />Effective Salary: {formatMoney(calculateEffectiveSalary(offer))}</p>
                   <div className="flex space-x-2 mt-4">
                     <Dialog>
                       <DialogTrigger asChild>
@@ -432,29 +665,84 @@ export function NestQuestComponent() {
                         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <p><MapPin className="inline mr-2 text-muted-foreground" />Location: {offer.location}</p>
-                            <p><DollarSign className="inline mr-2 text-muted-foreground" />Base Salary: ${offer.base}</p>
-                            {parseInt(offer.bonus) > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Bonus: ${offer.bonus}</p>}
-                            {parseInt(offer.signOn) > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Sign On: ${offer.signOn}</p>}
-                            {parseInt(offer.relocation) > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Relocation: ${offer.relocation}</p>}
+                            <p><DollarSign className="inline mr-2 text-muted-foreground" />Base Salary: {formatMoney(offer.base)}</p>
+                            {offer.bonus > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Bonus: {formatMoney(offer.bonus)}</p>}
+                            {offer.signOn > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Sign On: {formatMoney(offer.signOn)}</p>}
+                            {offer.relocation > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Relocation: {formatMoney(offer.relocation)}</p>}
+                            {offer.OtherExpenses > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Other Expenses: {formatMoney(offer.OtherExpenses)}</p>}
                             {offer.equity && offer.equity.amount && (
                               <>
                                 <p><DollarSign className="inline mr-2 text-muted-foreground" />Equity Type: {offer.equity.type}</p>
                                 <p><DollarSign className="inline mr-2 text-muted-foreground" />Equity Amount: {offer.equity.amount}</p>
                                 <p><DollarSign className="inline mr-2 text-muted-foreground" />Vesting Period: {offer.equity.vestingPeriod} years</p>
                                 <p><DollarSign className="inline mr-2 text-muted-foreground" />Vesting Schedule: {offer.equity.vestingSchedule}</p>
-                                <p><DollarSign className="inline mr-2 text-muted-foreground" />Market Rate: ${offer.equity.marketRate}</p>
+                                <p>
+                                  <DollarSign className="inline mr-2 text-muted-foreground" />
+                                  Market Rate: {formatMoney(offer.equity.marketRate)}
+                                </p>
                               </>
                             )}
-                            <p><DollarSign className="inline mr-2 text-muted-foreground" />Total Compensation: ${calculateTotalCompensation(offer)}</p>
-                            <p><DollarSign className="inline mr-2 text-muted-foreground" />Average Rent: $2000</p>
-                            <p><DollarSign className="inline mr-2 text-muted-foreground" />Average Food Cost: $500</p>
+                            <p><DollarSign className="inline mr-2 text-muted-foreground" />Total Compensation: {formatMoney(calculateTotalCompensation(offer))}</p>
+                            <p><DollarSign className="inline mr-2 text-muted-foreground" />Effective Salary: {formatMoney(calculateEffectiveSalary(offer))}</p>
                           </div>
                           <div>
                             <h3 className="text-xl font-bold mt-4 mb-2 text-primary">Budget Breakdown</h3>
                             {renderPieChart(offer)}
-                            <h3 className="text-xl font-bold mt-4 mb-2 text-primary">Compensation Breakdown</h3>
-                            {renderRadarChart(offer)}
                           </div>
+                        </div>
+                        <div className="mt-8">
+                          <h3 className="text-xl font-bold mb-4 text-primary">FIRE Calculations</h3>
+                          {(() => {
+                            const fireCalc = calculateFIRE(offer)
+                            return (
+                              <>
+                                <p className="flex items-center">
+                                  FIRE Number: {formatMoney(fireCalc.fireNumber)}
+                                  <Popover>
+                                    <PopoverTrigger>
+                                      <HelpCircle className="ml-2 h-4 w-4" />
+                                    </PopoverTrigger>
+                                    <PopoverContent>
+                                      The FIRE (Financial Independence, Retire Early) number is 25 times your annual expenses. This is based on the 4% rule, which suggests you can withdraw 4% of your portfolio annually in retirement.
+                                    </PopoverContent>
+                                  </Popover>
+                                </p>
+                                <p className="flex items-center">
+                                  Years to FIRE (No Interest): {fireCalc.yearsToFIRE0.toFixed(2)} years
+                                  <Popover>
+                                    <PopoverTrigger>
+                                      <HelpCircle className="ml-2 h-4 w-4" />
+                                    </PopoverTrigger>
+                                    <PopoverContent>
+                                      This is how long it would take to reach your FIRE number if you simply saved your money without any investment returns.
+                                    </PopoverContent>
+                                  </Popover>
+                                </p>
+                                <p className="flex items-center">
+                                  Years to FIRE (4.25% return): {fireCalc.yearsToFIRE425.toFixed(2)} years
+                                  <Popover>
+                                    <PopoverTrigger>
+                                      <HelpCircle className="ml-2 h-4 w-4" />
+                                    </PopoverTrigger>
+                                    <PopoverContent>
+                                      This is how long it would take to reach your FIRE number if you invested your savings at a 4.25% annual return, which is a conservative estimate based on average treasury bond returns.
+                                    </PopoverContent>
+                                  </Popover>
+                                </p>
+                                <p className="flex items-center">
+                                  Years to FIRE (10% return): {fireCalc.yearsToFIRE10.toFixed(2)} years
+                                  <Popover>
+                                    <PopoverTrigger>
+                                      <HelpCircle className="ml-2 h-4 w-4" />
+                                    </PopoverTrigger>
+                                    <PopoverContent>
+                                      This is how long it would take to reach your FIRE number if you invested your savings at a 10% annual return, which is based on the historical average return of the S&P 500.
+                                    </PopoverContent>
+                                  </Popover>
+                                </p>
+                              </>
+                            )
+                          })()}
                         </div>
                       </DialogContent>
                     </Dialog>
@@ -503,14 +791,16 @@ export function NestQuestComponent() {
                     </CardHeader>
                     <CardContent>
                       <p><MapPin className="inline mr-2 text-muted-foreground" />Location: {offer.location}</p>
-                      <p><DollarSign className="inline mr-2 text-muted-foreground" />Base Salary: ${offer.base}</p>
-                      {parseInt(offer.bonus) > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Bonus: ${offer.bonus}</p>}
-                      {parseInt(offer.signOn) > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Sign On: ${offer.signOn}</p>}
-                      {parseInt(offer.relocation) > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Relocation: ${offer.relocation}</p>}
+                      <p><DollarSign className="inline mr-2 text-muted-foreground" />Base Salary: {formatMoney(offer.base)}</p>
+                      {offer.bonus > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Bonus: {formatMoney(offer.bonus)}</p>}
+                      {offer.signOn > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Sign On: {formatMoney(offer.signOn)}</p>}
+                      {offer.relocation > 0 && <p><DollarSign className="inline mr-2 text-muted-foreground" />Relocation: {formatMoney(offer.relocation)}</p>}
                       {offer.equity && offer.equity.amount && (
-                        <p><DollarSign className="inline mr-2 text-muted-foreground" />Yearly Equity Value: ${(parseFloat(offer.equity.amount) * parseFloat(offer.equity.marketRate)) / parseFloat(offer.equity.vestingPeriod)}</p>
+                        <p><DollarSign className="inline mr-2 text-muted-foreground" />Yearly Equity Value: {formatMoney((offer.equity.amount * offer.equity.marketRate) / offer.equity.vestingPeriod)}</p>
                       )}
-                      <p className="font-bold mt-2 text-primary">Total Compensation: ${calculateTotalCompensation(offer)}</p>
+                      <p className="font-bold mt-2 text-primary">Total Compensation: {formatMoney(calculateTotalCompensation(offer))}</p>
+                      <p className="font-bold text-primary">Effective Salary: {formatMoney(calculateEffectiveSalary(offer))}</p>
+                      {renderPieChart(offer)}
                     </CardContent>
                   </Card>
                 ))}
@@ -527,12 +817,43 @@ export function NestQuestComponent() {
 
               <Card className="mt-8">
                 <CardHeader>
+                  <CardTitle className="text-primary">FIRE Timeline Comparison</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {renderFIRETimeline()}
+                </CardContent>
+              </Card>
+
+              <Card className="mt-8">
+                <CardHeader>
                   <CardTitle className="text-primary">Location Comparison</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p><DollarSign className="inline mr-2 text-muted-foreground" />Average Rent Difference: ${Math.abs(2000 - 2000)}</p>
-                  <p><DollarSign className="inline mr-2 text-muted-foreground" />Average Food Cost Difference: ${Math.abs(500 - 500)}</p>
-                  <p className="text-sm text-muted-foreground mt-2">Note: Using placeholder values for rent and food costs. In a real app, these would be fetched from a database or API based on the actual locations.</p>
+                  {comparedOffers.map((offer, index) => {
+                    const locationData = locations.find(loc => `${loc.city}, ${loc.state}` === offer.location)
+                    return (
+                      <div key={index} className="mb-4">
+                        <h3 className="font-semibold text-lg">{offer.location}</h3>
+                        <p><DollarSign className="inline mr-2 text-muted-foreground" />Average Rent: {formatMoney(locationData ? locationData.rent : 0)}</p>
+                        <p><DollarSign className="inline mr-2 text-muted-foreground" />Average Food Cost: {formatMoney(locationData ? locationData.foodCost : 0)}</p>
+                        <p><DollarSign className="inline mr-2 text-muted-foreground" />State Tax Rate: {locationData ? (locationData.stateTax * 100).toFixed(2) : 'N/A'}%</p>
+                        <p><DollarSign className="inline mr-2 text-muted-foreground" />Local Tax Rate: {locationData ? (locationData.localTax * 100).toFixed(2) : 'N/A'}%</p>
+                      </div>
+                    )
+                  })}
+                </CardContent>
+              </Card>
+
+              <Card className="mt-8">
+                <CardHeader>
+                  <CardTitle className="text-primary">Location Pros and Cons</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {locationComparison ? (
+                    <div dangerouslySetInnerHTML={{ __html: locationComparison }} />
+                  ) : (
+                    <p>Loading location comparison...</p>
+                  )}
                 </CardContent>
               </Card>
             </>
