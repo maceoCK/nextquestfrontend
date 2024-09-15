@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { SignInButton, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Input } from "~/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import NestQuestLogo from "../app/nestquest.svg";
 import {
   Select,
   SelectContent,
@@ -760,9 +761,11 @@ export function NestQuestComponent() {
     <div className="min-h-screen bg-background text-foreground p-8">
       <SignedIn>
         <div className="flex justify-between items-center mb-8">
+          <div className="flex flex-row justify-center items-center">
           <h1 className="text-4xl font-bold text-primary">
-            NestQuest: Job Offer Comparison Tool
+            NestQuest: Find your home away from home
           </h1>
+          </div>
           <SignedOut>
             <SignInButton />
           </SignedOut>
