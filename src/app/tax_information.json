@@ -59,6 +59,14 @@
       "supplemental": 0.0085
     },
     {
+      "city": "Richmond",
+      "state": "Virginia",
+      "tax_brackets": "NA",
+      "avg_food": 350,
+      "avg_rent": 1243,
+      "supplemental": "NA"
+    },
+    {
       "city": "Chicago",
       "state": "Illinois",
       "tax_brackets": "NA",
@@ -242,6 +250,24 @@
           "rate": 0.0549
         }
       ]
+    },
+    {
+      "state": "Virginia",
+      "income_tax": [
+        {
+          "income_range": 3000,
+          "rate": 0.02
+        },
+        {
+          "income_range": 5000,
+          "rate": 0.03
+        },
+        {
+          "income_range": 17000,
+          "rate": 0.05
+        }
+      ],
+      "supplemental_tax": 0.0575
     }
   ],
 
